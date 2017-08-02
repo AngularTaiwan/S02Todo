@@ -1,7 +1,8 @@
-import { Component, OnInit } from '@angular/core';
+import {Component, Inject, OnInit} from '@angular/core';
+import {Http} from '@angular/http';
 
-import { Todo, TodoStatus } from './models';
-import { generateId } from './mock';
+import {generateId} from './mock';
+import {Todo, TodoStatus} from './models';
 
 @Component({
   selector: 'app-root',
@@ -9,14 +10,33 @@ import { generateId } from './mock';
   styleUrls: ['./app.component.css']
 })
 export class AppComponent implements OnInit {
-
   filterCondition: TodoStatus|undefined;
 
   todoList: Todo[] = [];
 
+  constructor(@Inject('api') private api: string, private http: Http) {}
+
   ngOnInit(): void {
-    const data = JSON.parse(localStorage.getItem('todoList'));
-    this.todoList = data.map(p => new Todo({id: p.id, name: p.name, status: p.status}));
+    // const data = JSON.parse(localStorage.getItem('todoList'));
+    // this.todoList = data.map(p => new Todo({id: p.id, name: p.name, status:
+    // p.status}));
+
+    this.getTodoWithHttp().subscribe(
+        data => this.todoList = data.json().map(
+            p => new Todo({id: p.id, name: p.name, status: p.status})));
+  }
+
+  addTodoWithHttp(todo: Todo) {
+    this.http.post(`${this.api}/todos/`, todo).subscribe();
+  }
+  getTodoWithHttp() {
+    return this.http.get(`${this.api}/todos/`);
+  }
+  updateTodoWithHttp(todo: Todo) {
+    this.http.put(`${this.api}/todos/${todo.id}`, todo).subscribe();
+  }
+  deleteTodoWithHttp(todo: Todo) {
+    this.http.delete(`${this.api}/todos/${todo.id}`).subscribe();
   }
 
   saveToLocalStorage() {
@@ -24,38 +44,49 @@ export class AppComponent implements OnInit {
   }
 
   createNewTodo(input: HTMLInputElement) {
-    this.todoList.push(new Todo({
+    const todo = new Todo({
       id: Math.max(0, ...this.todoList.map(p => p.id)) + 1,
       name: input.value,
       status: TodoStatus.Active,
-    }));
+    });
+    this.todoList.push(todo);
     input.value = '';
     this.saveToLocalStorage();
+    this.addTodoWithHttp(todo);
   }
 
   updateTodo(todo: Todo, input: HTMLInputElement) {
     todo.name = input.value;
     todo.selected = false;
     this.saveToLocalStorage();
+    this.updateTodoWithHttp(todo);
   }
 
   switchStatus(todo: Todo) {
     todo.switchStatus();
     this.saveToLocalStorage();
+    this.updateTodoWithHttp(todo);
   }
 
   deleteTodo(index: number) {
-    this.todoList.splice(index, 1);
+    // this.deleteTodoWithHttp(this.todoList[index]);
+    const remove = this.todoList.splice(index, 1);
+    this.deleteTodoWithHttp(remove[0]);
     this.saveToLocalStorage();
   }
 
   clearCompletedTodo() {
+    const completedTodo = this.todoList.filter(todo => todo.isCompleted);
+    completedTodo.forEach(todo => this.deleteTodoWithHttp(todo));
     this.todoList = this.todoList.filter(todo => !todo.isCompleted);
     this.saveToLocalStorage();
   }
 
   completedAllTodo() {
-    this.todoList.forEach(todo => todo.status = TodoStatus.Completed);
+    this.todoList.forEach(todo => {
+      todo.status = TodoStatus.Completed;
+      this.updateTodoWithHttp(todo);
+    });
     this.saveToLocalStorage();
   }
 
@@ -84,7 +115,4 @@ export class AppComponent implements OnInit {
   get leftTodo() {
     return this.todoList.filter(todo => !todo.isCompleted).length;
   }
-
-
-
 }
