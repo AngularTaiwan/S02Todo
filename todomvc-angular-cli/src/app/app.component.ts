@@ -1,8 +1,12 @@
 import {Component, Inject, OnInit} from '@angular/core';
 import {Http} from '@angular/http';
+import {Observable} from 'rxjs/Observable';
 
 import {generateId} from './mock';
 import {Todo, TodoStatus} from './models';
+import {StorageApiService} from './storage-api.service';
+import {TodoApiService} from './todo-api.service';
+import {TodoService} from './todo.service';
 
 @Component({
   selector: 'app-root',
@@ -11,101 +15,51 @@ import {Todo, TodoStatus} from './models';
 })
 export class AppComponent implements OnInit {
   filterCondition: TodoStatus|undefined;
+  todoStatus = TodoStatus;
+  todoList: Observable<Todo[]>;
 
-  todoList: Todo[] = [];
-
-  constructor(@Inject('api') private api: string, private http: Http) {}
+  constructor(public todoService: TodoService) {}
 
   ngOnInit(): void {
-    // const data = JSON.parse(localStorage.getItem('todoList'));
-    // this.todoList = data.map(p => new Todo({id: p.id, name: p.name, status:
-    // p.status}));
-
-    this.getTodoWithHttp().subscribe(
-        data => this.todoList = data.json().map(
-            p => new Todo({id: p.id, name: p.name, status: p.status})));
+    this.todoList = this.todoService.getList();
   }
 
-  addTodoWithHttp(todo: Todo) {
-    this.http.post(`${this.api}/todos/`, todo).subscribe();
-  }
-  getTodoWithHttp() {
-    return this.http.get(`${this.api}/todos/`);
-  }
-  updateTodoWithHttp(todo: Todo) {
-    this.http.put(`${this.api}/todos/${todo.id}`, todo).subscribe();
-  }
-  deleteTodoWithHttp(todo: Todo) {
-    this.http.delete(`${this.api}/todos/${todo.id}`).subscribe();
-  }
-
-  saveToLocalStorage() {
-    localStorage.setItem('todoList', JSON.stringify(this.todoList));
-  }
 
   createNewTodo(input: HTMLInputElement) {
-    const todo = new Todo({
-      id: Math.max(0, ...this.todoList.map(p => p.id)) + 1,
-      name: input.value,
-      status: TodoStatus.Active,
-    });
-    this.todoList.push(todo);
+    this.todoService.create(input.value);
     input.value = '';
-    this.saveToLocalStorage();
-    this.addTodoWithHttp(todo);
   }
 
   updateTodo(todo: Todo, input: HTMLInputElement) {
-    todo.name = input.value;
-    todo.selected = false;
-    this.saveToLocalStorage();
-    this.updateTodoWithHttp(todo);
+    this.todoService.update(todo, input.value);
   }
 
   switchStatus(todo: Todo) {
-    todo.switchStatus();
-    this.saveToLocalStorage();
-    this.updateTodoWithHttp(todo);
+    this.todoService.switchStatus(todo);
   }
 
-  deleteTodo(index: number) {
-    // this.deleteTodoWithHttp(this.todoList[index]);
-    const remove = this.todoList.splice(index, 1);
-    this.deleteTodoWithHttp(remove[0]);
-    this.saveToLocalStorage();
+  deleteTodo(todo: Todo) {
+    this.todoService.delete(todo);
   }
 
   clearCompletedTodo() {
-    const completedTodo = this.todoList.filter(todo => todo.isCompleted);
-    completedTodo.forEach(todo => this.deleteTodoWithHttp(todo));
-    this.todoList = this.todoList.filter(todo => !todo.isCompleted);
-    this.saveToLocalStorage();
+    this.todoService.clearCompletedTodo();
   }
 
   completedAllTodo() {
-    this.todoList.forEach(todo => {
-      todo.status = TodoStatus.Completed;
-      this.updateTodoWithHttp(todo);
-    });
-    this.saveToLocalStorage();
+    this.todoService.completedAllTodo();
   }
 
   // setting
   show(condition: string) {
     this.filterCondition = TodoStatus[condition];
   }
-  // showAll() { this.filterCondition = undefined; }
-  // showActive() { this.filterCondition = TodoStatus.Active; }
-  // showCompleted() { this.filterCondition = TodoStatus.Completed; }
 
   // check
   isShow(condition: string) {
     return this.filterCondition === TodoStatus[condition];
   }
-  // isShowAll() { return !this.filterCondition; }
-  // isShowActive() { return this.filterCondition === TodoStatus.Active; }
-  // isShowCompleted() { return this.filterCondition === TodoStatus.Completed; }
-
+  // component UI 行為
   selectTodo(todo: Todo, input: HTMLInputElement) {
     todo.selected = true;
     input.value = todo.name;
@@ -113,6 +67,7 @@ export class AppComponent implements OnInit {
   }
 
   get leftTodo() {
-    return this.todoList.filter(todo => !todo.isCompleted).length;
+    return this.todoList.map(
+        todoList => todoList.filter(todo => !todo.isCompleted).length);
   }
 }
